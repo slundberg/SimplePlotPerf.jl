@@ -1,5 +1,7 @@
 using SimplePlotPerf
 using Base.Test
 
-# write your own tests here
-@test 1 == 1
+# just make sure it runs
+prplot(Dict(
+    "test" => rand(100)
+), bitrand(100))
