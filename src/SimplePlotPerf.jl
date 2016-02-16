@@ -73,7 +73,9 @@ function prplot(methods::Dict, truth, samplePoints=linspace(0,1,200))
     axis(
         methodLayers...,
         line(rmean, pmean, color="#666666", linewidth=2, label="Random (AUC $aucRand)"),
-        layers...
+        layers...,
+        xlabel="recall",
+        ylabel="precision"
     )
 end
 
