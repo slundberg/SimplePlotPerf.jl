@@ -2,7 +2,7 @@ module SimplePlotPerf
 
 using SimplePlot
 
-export prplot
+export prplot,precisionrecall,kaplanmeier
 
 function precisionrecall(sortedLabels; samplePoints=nothing)
     p = Float64[]
@@ -45,38 +45,104 @@ function precisionrecall(pred, labels; samplePoints=nothing)
     precisionrecall(labels[sortperm(pred, rev=true)], samplePoints=samplePoints)
 end
 
-function prplot(methods::Dict, truth, samplePoints=linspace(0,1,200))
+function prplot(methods::AbstractArray, truth; samplePoints=linspace(0,1,200), auc=true,
+        randomMeanLayer=line(),
+        randomSampleLayer=line(), kwargs...)
     rmean = zeros(length(samplePoints))
     pmean = zeros(length(samplePoints))
     layers = Any[]
-    #truth = methods[first(keys(methods))][1]
     numRandom = 10
     for i in 1:numRandom
         r,p = precisionrecall(rand(length(truth)), truth, samplePoints=samplePoints)
         rmean .+= r
         pmean .+= p
-        #aucValue = @sprintf("%0.03f", MLBasePlotting.area_under_curve(xvals, yvals))
-        push!(layers, line(r, p, color="#cccccc"))
+
+        layerParams = merge(Dict(
+            :color => "#cccccc"
+        ), randomSampleLayer.params, randomSampleLayer.unusedParams)
+        push!(layers, line(r, p; layerParams...))
     end
     rmean ./= numRandom
     pmean ./= numRandom
     aucRand = @sprintf("%0.03f", area_under_curve(rmean, pmean))
 
-
     methodLayers = Any[]
-    for k in keys(methods)
-        r,p = precisionrecall(methods[k], truth, samplePoints=samplePoints)
-        auc = @sprintf("%0.03f", area_under_curve(r, p))
-        push!(methodLayers, line(r, p, label="$k (AUC $auc)", linewidth=2))
+    for (ind,method) in enumerate(methods)
+        r,p = nothing,nothing
+        if typeof(method[2][1]) <: Array
+            r = zeros(length(samplePoints))
+            p = zeros(length(samplePoints))
+
+            for member in method[2]
+                rtmp,ptmp = precisionrecall(member, truth, samplePoints=samplePoints)
+                r .+= rtmp
+                p .+= ptmp
+                layerParams = merge(Dict(
+                    :color => SimplePlot.colors[ind],
+                    :alpha => 0.5,
+                ))
+                push!(layers, line(rtmp, ptmp; layerParams...))
+            end
+            r ./= length(method[2])
+            p ./= length(method[2])
+        else
+            r,p = precisionrecall(method[2], truth, samplePoints=samplePoints)
+        end
+
+        aucStr = @sprintf("%0.03f", area_under_curve(r, p))
+        layerParams = Dict{Any,Any}(
+            :linewidth => 2,
+            :label => method[1]*(auc ? " (AUC $aucStr)" : "")
+        )
+        if length(method) > 2
+            @assert typeof(method[3]) <: SimplePlot.LineLayer "Third slot for a method must be a template line layer"
+            merge!(layerParams, method[3].params, method[3].unusedParams)
+        end
+        push!(methodLayers, line(r, p; layerParams...))
     end
 
+    aucStr = @sprintf("%0.03f", area_under_curve(rmean, pmean))
+    layerParams = merge(Dict(
+        :color => "#666666",
+        :linewidth => 2,
+        :label => "Random"*(auc ? " (AUC $aucStr)" : "")
+    ), randomMeanLayer.params, randomMeanLayer.unusedParams)
     axis(
         methodLayers...,
-        line(rmean, pmean, color="#666666", linewidth=2, label="Random (AUC $aucRand)"),
-        layers...,
+        line(rmean, pmean; layerParams...),
+        layers...;
         xlabel="recall",
-        ylabel="precision"
+        ylabel="precision",
+        kwargs...
     )
+end
+
+function kaplanmeier(times, events)
+    xs = Float64[]
+    ys = Float64[]
+
+    probSurv = 1
+    N = length(times)
+    numEventsNow = 0
+    lastTime = -1.0
+
+    count = 0
+    for i in sortperm(times)
+        count += 1
+
+        # if we have a new unique time point
+        if times[i] != lastTime && lastTime >= 0.0
+            numLeft = N-count+1
+            probSurv *= (numLeft - numEventsNow)/numLeft
+            numEventsNow = 0
+            push!(xs, times[i])
+            push!(ys, probSurv)
+        end
+
+        lastTime = times[i]
+        numEventsNow += 1
+    end
+    xs,ys
 end
 
 # must be sorted by increasing x
