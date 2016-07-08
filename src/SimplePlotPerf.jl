@@ -46,6 +46,7 @@ function precisionrecall(pred, labels; samplePoints=nothing)
 end
 
 function prplot(methods::AbstractArray, truth; samplePoints=linspace(0,1,200), auc=true,
+        colors=SimplePlot.colors,
         randomMeanLayer=line(),
         randomSampleLayer=line(), kwargs...)
     rmean = zeros(length(samplePoints))
@@ -78,7 +79,7 @@ function prplot(methods::AbstractArray, truth; samplePoints=linspace(0,1,200), a
                 r .+= rtmp
                 p .+= ptmp
                 layerParams = merge(Dict(
-                    :color => SimplePlot.colors[ind],
+                    :color => colors[ind],
                     :alpha => 0.5,
                 ))
                 push!(layers, line(rtmp, ptmp; layerParams...))
@@ -92,6 +93,7 @@ function prplot(methods::AbstractArray, truth; samplePoints=linspace(0,1,200), a
         aucStr = @sprintf("%0.03f", area_under_curve(r, p))
         layerParams = Dict{Any,Any}(
             :linewidth => 2,
+            :color => colors[ind],
             :label => method[1]*(auc ? " (AUC $aucStr)" : "")
         )
         if length(method) > 2
